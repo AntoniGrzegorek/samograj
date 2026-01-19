@@ -3,18 +3,17 @@
 
 #include <Arduino.h>
 
-// Struktura do przechowywania informacji o timerze dla każdego magnesu
-struct MagnesTimer {
-  hw_timer_t* timer;
-  int pin;
-  volatile bool active;
-};
+// Ilość magnesów w systemie
+#define MAGNET_COUNT 24
 
-// Tablica struktur dla każdego magnesu (maksymalnie 4 timery na ESP32)
-extern MagnesTimer magnesTimers[4];
-extern int timerCount;
+// Globalna tablica czasów (odlicza czas w dół dla każdego magnesu)
+extern volatile int magnetTimers[MAGNET_COUNT];
 
-// Funkcja wywoływana w przerwaniu timera
-void IRAM_ATTR onMagnesTimer(MagnesTimer* mt);
+// Tablica mapująca indeksy (0-23) na fizyczne piny (MAGNES1...MAGNES24)
+// Musi być dostępna dla przerwania
+extern int MAGNET_PINS[MAGNET_COUNT];
+
+// Inicjalizacja timera obsługującego czasy trwania (co 1ms)
+void initDurationTimer();
 
 #endif
