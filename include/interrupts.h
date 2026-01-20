@@ -14,6 +14,6 @@ extern volatile int magnetTimers[MAGNET_COUNT];
 extern int MAGNET_PINS[MAGNET_COUNT];
 
 // Inicjalizacja timera obsługującego czasy trwania (co 1ms)
-void initDurationTimer();
+void initDurationTimer(int bpm);
 
 #endif

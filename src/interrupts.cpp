@@ -4,7 +4,7 @@
 volatile int magnetTimers[MAGNET_COUNT] = {0};
 
 // Wskaźnik na timer sprzętowy
-hw_timer_t *durationTimer = NULL;
+extern hw_timer_t *bpmTimer;
 
 // Funkcja przerwania (wywoływana co 1ms)
 void IRAM_ATTR onDurationTimer() {
@@ -21,16 +21,20 @@ void IRAM_ATTR onDurationTimer() {
   }
 }
 
-void initDurationTimer() {
+void initDurationTimer(int bpm) {
+
+  //bpm to ticks
+  int ticks = 60000 / bpm / 2; //ms na ósemkę
+
   // Używamy Timera 0, prescaler 80 (dla 80MHz daje 1 tick = 1us)
-  durationTimer = timerBegin(0, 80, true);
+  bpmTimer = timerBegin(0, 80, true);
   
   // Podpinamy funkcję przerwania
-  timerAttachInterrupt(durationTimer, &onDurationTimer, true);
-  
-  // Ustawiamy alarm co 1000 ticków (1000us = 1ms)
-  timerAlarmWrite(durationTimer, 1000, true);
-  
+  timerAttachInterrupt(bpmTimer, &onDurationTimer, true);
+
+  // Ustawiamy alarm co ticks ticków (1000us = 1ms)
+  timerAlarmWrite(bpmTimer, 1000*ticks, true);
+
   // Włączamy timer
-  timerAlarmEnable(durationTimer);
+  timerAlarmEnable(bpmTimer);
 }
