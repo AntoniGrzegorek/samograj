@@ -1,10 +1,13 @@
+//przykładowy JSON
 {
-  "bpm": 120,
-  "notes": [
-    {"n": 40, "d": 150}, 
-    {"n": 42, "d": 150},
-    {"n": 44, "d": 150},
-    {"n": 0,  "d": 0},
-    {"n": 47, "d": 200}
+  "bpm": 120, //bpm - beats per minute
+  "tacts": //lista taktów
+  [
+    [{"n": 1, "d": 2}], //takt z jedną nutą trwającą dwa takty
+    [{"n": -1, "d": 1}], //takt pauzy, długość jest ignorowana
+    [ //takt z dwudźwiękiem
+      {"n": 1, "d": 4},
+      {"n": 3, "d": 4}
+    ]
   ]
 }

@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <LITTLEFS.h>
+#include <LittleFS.h>
 #include "interrupts.h"
 
 // led i przyciski
@@ -108,7 +108,7 @@ void setup() {
   }
 
   //Inicjalizacja LittleFS
-  if(!LITTLEFS.begin()){
+  if(!LittleFS.begin()){
     Serial.println("Błąd wczytywania pamięci flash");
     return;
   }
@@ -136,6 +136,7 @@ void loop() {
     else {
       running = false;
       digitalWrite(LED, LOW);
+      timerAlarmDisable(bpmTimer);
     }
   delay(50); // Debounce
   }
@@ -161,7 +162,7 @@ void loop() {
 
 int count_JSONs() {
   int count = 0;
-  File root = LITTLEFS.open("/");
+  File root = LittleFS.open("/");
   File file = root.openNextFile();
   while(file) {
     String filename = file.name();
@@ -176,7 +177,7 @@ int count_JSONs() {
 void graj() {
   // Odczytanie odpowiedniego pliku JSON
   String filename = "/" + String(song_index) + ".json";
-  File file = LITTLEFS.open(filename, "r");
+  File file = LittleFS.open(filename, "r");
   if(!file) {
     Serial.println("Nie można otworzyć pliku: " + filename);
     return;
@@ -228,50 +229,86 @@ void nowaFunkcjaMagnesow(int magnetIndex, int durationMs) {
 }
 
 void zapisz_nuty() {
+  //inkrementujemy nr taktu
   takt++;
+  //sprawdzamy czy koniec utworu
   if(takt > osemkowe_takty) {
     takt = 0;
     timerAlarmDisable(bpmTimer);
     timerEnd(bpmTimer);
     running = false;
   }
+  //odtwarzamy nuty z aktualnego taktu
   else{
-    int nuta = nuty[takt]["n"];
-    int dlugosc = nuty[takt]["d"];
-    if(nuta!=-1){
-      nowaFunkcjaMagnesow(nuta, dlugosc);
-      delay(100);
-      motorki(nuta);
+    for(int i=0; i<nuty[takt].size(); i++){
+      int nuta = nuty[takt][i]["n"];
+      int dlugosc = nuty[takt][i]["d"];
+      if(nuta!=-1){
+        nowaFunkcjaMagnesow(nuta_na_magnes(nuta), dlugosc);
+        }
+    }
+    delay(100);
+    for(int i=0; i<nuty[takt].size(); i++){
+      int nuta = nuty[takt][i]["n"];
+      if(nuta!=-1){
+        motorki(nuta);
+      }
     }
   }
 }
 
 void motorki(int nuta) {
   //sterowanie motorkami na podstawie nut
-  if(nuta >= 1 && nuta <= 4) {
+  if(nuta >= 1 && nuta <= 5) {
     stan_motorkow[0] = -stan_motorkow[0]; // Zmiana stanu motorka 1
     pwm(MOTOR_CHANNELS[0], stan_motorkow[0]); // Ruch do pozycji aktywnej
     }
-  if(nuta >= 5 && nuta <= 8) {
+  if(nuta >= 6 && nuta <= 10) {
     stan_motorkow[1] = -stan_motorkow[1]; // Zmiana stanu motorka 2
     pwm(MOTOR_CHANNELS[1], stan_motorkow[1]); // Ruch do pozycji aktywnej
     }
-  if(nuta >= 9 && nuta <= 12) {
+  if(nuta >= 11 && nuta <= 15) {
     stan_motorkow[2] = -stan_motorkow[2]; // Zmiana stanu motorka 3
     pwm(MOTOR_CHANNELS[2], stan_motorkow[2]); // Ruch do pozycji aktywnej
     }
-  if(nuta >= 13 && nuta <= 16) {
+  if(nuta >= 16 && nuta <= 20) {
     stan_motorkow[3] = -stan_motorkow[3]; // Zmiana stanu motorka 4
     pwm(MOTOR_CHANNELS[3], stan_motorkow[3]); // Ruch do pozycji aktywnej
     }
-  if(nuta >= 17 && nuta <= 20) {
+  if(nuta >= 21 && nuta <= 25) {
     stan_motorkow[4] = -stan_motorkow[4]; // Zmiana stanu motorka 1
     pwm(MOTOR_CHANNELS[4], stan_motorkow[4]); // Ruch do pozycji aktywnej
     }
-  if(nuta >= 21 && nuta <= 24) {
+  if(nuta >= 26 && nuta <= 30) {
     stan_motorkow[5] = -stan_motorkow[5]; // Zmiana stanu motorka 1
     pwm(MOTOR_CHANNELS[5], stan_motorkow[5]); // Ruch do pozycji aktywnej
     }
+}
+
+int nuta_na_magnes(int nuta){
+  //funkcja zwracająca numer magnesu na podstawie nuty
+  //nuta 1, 6, 11, 16, 21, 26 pusta struna
+  if (nuta % 5 == 1) {
+    return -1; //pusta struna
+  }
+  else if(1<nuta<6){
+    return (nuta - 1); //mapowanie nut na magnesy
+  }
+  else if(6<nuta<11){
+    return (nuta - 2);
+  }
+  else if(11<nuta<16){
+    return (nuta - 3);
+  }
+  else if(16<nuta<21){
+    return (nuta - 4);
+  }
+  else if(21<nuta<26){
+    return (nuta - 5);
+  }
+  else if(26<nuta<31){
+    return (nuta - 6);
+  }
 }
 
 void grajZJson(const char* jsonInput) {

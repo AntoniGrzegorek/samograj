@@ -5,20 +5,11 @@ volatile int magnetTimers[MAGNET_COUNT] = {0};
 
 // Wskaźnik na timer sprzętowy
 extern hw_timer_t *bpmTimer;
+extern bool przerwanie;
 
-// Funkcja przerwania (wywoływana co 1ms)
+// Funkcja przerwania
 void IRAM_ATTR onDurationTimer() {
-  for (int i = 0; i < MAGNET_COUNT; i++) {
-    // Jeśli czas jest większy od zera -> dekrementuj
-    if (magnetTimers[i] > 0) {
-      magnetTimers[i]--;
-      
-      // Jeśli wartość spadła do 0 w tym cyklu -> wyłącz magnes
-      if (magnetTimers[i] == 0) {
-        digitalWrite(MAGNET_PINS[i], 0); // Wyłącz pin
-      }
-    }
-  }
+  przerwanie = true;
 }
 
 void initDurationTimer(int bpm) {
