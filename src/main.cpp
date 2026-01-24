@@ -1,139 +1,90 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
+#include "main.h"
 #include "interrupts.h"
+#include "serwer.h"
 
-// led i przyciski
-const int LED = 6; // J1_6
-const int BUTTON1 = 5; // J1_4
-const int BUTTON2 = 4; // J1_5
+//definicje pinów i funkcji w main.h
 
-// Serwa
-const int MOTOR1 = 9;
-const int MOTOR2 = 10;
-const int MOTOR3 = 11;
-const int MOTOR4 = 12;
-const int MOTOR5 = 13;
-const int MOTOR6 = 14;
+//serwer HTTP w serwer.h
 
-//magnesy
-const int MAGNES1 = 43;   // EM1
-const int MAGNES2 = 44;  // EM2
-const int MAGNES3 = 1;  // EM3
-const int MAGNES4 = 2;   // EM4
-
-const int MAGNES5 = 42;  // EM5
-const int MAGNES6 = 41;  // EM6 (Schemat mówi GPIO45 dla J3_15, na liście miałeś błąd)
-const int MAGNES7 = 40;  // EM7
-const int MAGNES8 = 39;  // EM8
-
-const int MAGNES9 = 38;   // EM9
-const int MAGNES10 = 37;  // EM10 (UWAGA: Na schemacie EM10 i EM22 to ten sam pin? Sprawdź to!)
-const int MAGNES11 = 36;  // EM11
-const int MAGNES12 = 35; // EM12
-
-const int MAGNES13 = 48; // EM13
-const int MAGNES14 = 47; // EM14
-const int MAGNES15 = 21; // EM15
-const int MAGNES16 = 20; // EM16
-
-const int MAGNES17 = 19; // EM17
-const int MAGNES18 = 7; // EM18 (Poprawiono z J3_3)
-const int MAGNES19 = 15; // EM19
-const int MAGNES20 = 16; // EM20
-
-const int MAGNES21 = 17; // EM21
-const int MAGNES22 = 18;  // EM22 (Konflikt z EM10? Sprawdź J3_20 vs J3_4)
-const int MAGNES23 = 8; // EM23
-const int MAGNES24 = 3; // EM24
-
-// Tablica pinów magnesów
-int MAGNET_PINS[24] = {
-  MAGNES1, MAGNES2, MAGNES3, MAGNES4, 
-  MAGNES5, MAGNES6, MAGNES7, MAGNES8, 
-  MAGNES9, MAGNES10, MAGNES11, MAGNES12,
-  MAGNES13, MAGNES14, MAGNES15, MAGNES16, 
-  MAGNES17, MAGNES18, MAGNES19, MAGNES20, 
-  MAGNES21, MAGNES22, MAGNES23, MAGNES24
-};
-
-// Tablica pinów motorków
-int MOTOR_PINS[6] = {MOTOR1, MOTOR2, MOTOR3, MOTOR4, MOTOR5, MOTOR6};
-
-// Kanały PWM
-const int PWM_FREQ = 50;
-const int PWM_RES = 14; // ESP32-S3 ma lepszą rozdzielczość
-const int MOTOR_CHANNELS[6] = {0, 1, 2, 3, 4, 5};
-
-volatile bool eightNoteTick = false;
-hw_timer_t *bpmTimer = NULL;
-
-// Deklaracje funkcji
-int count_JSONs(); //liczenie JSONów
-void graj(); //funkcja odtwarzająca utwór
-void pwm(int motorChannel, int position);
-void odliczaj(); //funkcja odliczająca czasy magnesów
-void zapisz_nuty(); //funkcja zapisująca aktualne nuty do timera
-void nowaFunkcjaMagnesow(int magnetIndex, int durationMs);
-void grajZJson(const char* jsonInput);
-void motorki(int nuta);
+//zmienne dotyczące przerwań
+extern hw_timer_t *bpmTimer; //wskaźnik na timer sprzętowy
+extern bool przerwanie; //czy było przerwanie od ostatniej iteracji pętli
 
 //zmienne globalne
 bool running = false; // Stan odtwarzania
 int JSON_count; //liczba JSONów w pamięci
 int song_index = 0; //aktualny indeks JSONa
-bool przerwanie = false; //czy było przerwanie od ostatniej iteracji pętli
 int osemkowe_takty = 0; //liczba ósemkowych taktów od startu utworu
 int takt = 0; //aktualny takt
-JsonArray nuty; //dokument JSON
+JsonArray nuty; //tablica nut
 int stan_motorkow[6]; //stan motorków
 
 void setup() {
-  Serial.begin(115200);
+  serwerprint("Rozpoczynanie inicjalizacji...");
+  //Inicjalizacja LittleFS
+  if(!LittleFS.begin()){
+    serwerprint("Błąd wczytywania pamięci flash");
+    return;
+  }
+  else {
+    serwerprint("Pamięć flash wczytana pomyślnie");
+  }
+
+  //inicjalizacja WiFi
+  setupWiFi();
+
+  //inicjalizacja endpointów serwera
+  endpoint_init();
 
   // Inicjalizacja PWM
   for(int i=0; i<6; i++) {
      ledcSetup(MOTOR_CHANNELS[i], PWM_FREQ, PWM_RES);
      ledcAttachPin(MOTOR_PINS[i], MOTOR_CHANNELS[i]);
   }
+  serwerprint("PWM zainicjalizowane.");
 
-//pinmode'y
+  //pinmode'y
   pinMode(LED, OUTPUT);
+  digitalWrite(LED, LOW);
   pinMode(BUTTON1, INPUT);
   pinMode(BUTTON2, INPUT);
   
   for(int i=0; i<24; i++) {
     pinMode(MAGNET_PINS[i], OUTPUT);
-    digitalWrite(MAGNET_PINS[i], 0);
+    digitalWrite(MAGNET_PINS[i], LOW);
   }
-
-  //Inicjalizacja LittleFS
-  if(!LittleFS.begin()){
-    Serial.println("Błąd wczytywania pamięci flash");
-    return;
-  }
+  serwerprint("GPIO zainicjalizowane.");
 
   //Liczenie JSONów
   JSON_count = count_JSONs();
+  serwerprint("Znaleziono " + String(JSON_count) + " plików JSON.");
 
   //ustawinie początkowych stanów motorków
   for(int i=0; i<6; i++) {
     stan_motorkow[i] = -1;
     pwm(MOTOR_CHANNELS[i], -1);
   }
+  serwerprint("Inicjalizacja zakończona.");
 }
 
 void loop() {
   // pętla główna
+  serwer.handleClient(); //obsługa serwera HTTP
   if(digitalRead(BUTTON1) == HIGH) {
+    serwerprint("Przycisk 1 wciśnięty");
     //start
     if(!running) {
+      serwerprint("Rozpoczynanie odtwarzania...");
       running = true;
       digitalWrite(LED, HIGH);
       graj();
     }
     //stop
     else {
+      serwerprint("Zatrzymywanie odtwarzania...");
       running = false;
       digitalWrite(LED, LOW);
       timerAlarmDisable(bpmTimer);
@@ -141,6 +92,7 @@ void loop() {
   delay(50); // Debounce
   }
   if(digitalRead(BUTTON2)==HIGH)
+  serwerprint("Przycisk 2 wciśnięty");
   {
     if(!running)
     {
@@ -150,10 +102,12 @@ void loop() {
       {
         song_index=0;
       }
+      serwerprint("Wybrano utwór o indeksie: " + String(song_index));
       delay(50); //debounce
     }
   }
   if(running && przerwanie){
+    serwerprint("Przerwanie timera - takt: " + String(takt));
     odliczaj();
     zapisz_nuty();
     przerwanie = false;
@@ -175,11 +129,12 @@ int count_JSONs() {
 }
 
 void graj() {
+  serwerprint("Odtwarzanie utworu index: " + String(song_index));
   // Odczytanie odpowiedniego pliku JSON
   String filename = "/" + String(song_index) + ".json";
   File file = LittleFS.open(filename, "r");
   if(!file) {
-    Serial.println("Nie można otworzyć pliku: " + filename);
+    serwerprint("Nie można otworzyć pliku: " + filename);
     return;
   }
 
@@ -201,7 +156,8 @@ for (int i = 0; i < MAGNET_COUNT; i++) {
       
       // Jeśli wartość spadła do 0 w tym cyklu -> wyłącz magnes
       if (magnetTimers[i] == 0) {
-        digitalWrite(MAGNET_PINS[i], 0); // Wyłącz pin
+        digitalWrite(MAGNET_PINS[i], LOW); // Wyłącz pin
+        serwerprint("Magnes " + String(i) + " wyłączony.");
       }
     }
   }
@@ -221,14 +177,15 @@ void pwm(int motorChannel, int position) {
 }
 
 void nowaFunkcjaMagnesow(int magnetIndex, int durationMs) {
-  if (magnetIndex < 0 || magnetIndex >= 24) return;
-  digitalWrite(MAGNET_PINS[magnetIndex], 1);
+  if (magnetIndex < 0 || magnetIndex >= 24) serwerprint("Błąd: nieprawidłowy indeks magnesu"); return;
+  digitalWrite(MAGNET_PINS[magnetIndex], HIGH);
   noInterrupts();
   magnetTimers[magnetIndex] = durationMs;
   interrupts();
+  serwerprint("Magnes " + String(magnetIndex) + " włączony na " + String(durationMs) + " ms.");
 }
 
-void zapisz_nuty() {
+void zapisz_nuty(int eight) {
   //inkrementujemy nr taktu
   takt++;
   //sprawdzamy czy koniec utworu
@@ -237,18 +194,21 @@ void zapisz_nuty() {
     timerAlarmDisable(bpmTimer);
     timerEnd(bpmTimer);
     running = false;
+    serwerprint("Koniec utworu.");
+    digitalWrite(LED, LOW);
   }
   //odtwarzamy nuty z aktualnego taktu
   else{
-    for(int i=0; i<nuty[takt].size(); i++){
+    int ilosc = nuty[takt].size();
+    serwerprint("Liczba nut: " + String(ilosc));
+    for(int i=0; i<ilosc; i++){
       int nuta = nuty[takt][i]["n"];
-      int dlugosc = nuty[takt][i]["d"];
-      if(nuta!=-1){
-        nowaFunkcjaMagnesow(nuta_na_magnes(nuta), dlugosc);
-        }
+      int dlugosc = eight*nuty[takt][i]["d"];
+      serwerprint("Nuta: " + String(nuta) + ", długość: " + String(dlugosc) + " ms");
+      if (nuta!=-1) nowaFunkcjaMagnesow(nuta_na_magnes(nuta), dlugosc);
     }
     delay(100);
-    for(int i=0; i<nuty[takt].size(); i++){
+    for(int i=0; i<ilosc; i++){
       int nuta = nuty[takt][i]["n"];
       if(nuta!=-1){
         motorki(nuta);
@@ -259,40 +219,44 @@ void zapisz_nuty() {
 
 void motorki(int nuta) {
   //sterowanie motorkami na podstawie nut
-  if(nuta >= 1 && nuta <= 5) {
+  if(1<nuta<6) {
     stan_motorkow[0] = -stan_motorkow[0]; // Zmiana stanu motorka 1
     pwm(MOTOR_CHANNELS[0], stan_motorkow[0]); // Ruch do pozycji aktywnej
+    serwerprint("Motorek 1 do pozycji " + String(stan_motorkow[0]));
     }
-  if(nuta >= 6 && nuta <= 10) {
+  else if(6<nuta<11) {
     stan_motorkow[1] = -stan_motorkow[1]; // Zmiana stanu motorka 2
     pwm(MOTOR_CHANNELS[1], stan_motorkow[1]); // Ruch do pozycji aktywnej
+    serwerprint("Motorek 2 do pozycji " + String(stan_motorkow[1]));
     }
-  if(nuta >= 11 && nuta <= 15) {
+  else if(11<nuta<16) {
     stan_motorkow[2] = -stan_motorkow[2]; // Zmiana stanu motorka 3
     pwm(MOTOR_CHANNELS[2], stan_motorkow[2]); // Ruch do pozycji aktywnej
+    serwerprint("Motorek 3 do pozycji " + String(stan_motorkow[2]));
     }
-  if(nuta >= 16 && nuta <= 20) {
+  else if(16<nuta<21) {
     stan_motorkow[3] = -stan_motorkow[3]; // Zmiana stanu motorka 4
     pwm(MOTOR_CHANNELS[3], stan_motorkow[3]); // Ruch do pozycji aktywnej
+    serwerprint("Motorek 4 do pozycji " + String(stan_motorkow[3]));
     }
-  if(nuta >= 21 && nuta <= 25) {
+  else if(21<nuta<26) {
     stan_motorkow[4] = -stan_motorkow[4]; // Zmiana stanu motorka 1
     pwm(MOTOR_CHANNELS[4], stan_motorkow[4]); // Ruch do pozycji aktywnej
+    serwerprint("Motorek 5 do pozycji " + String(stan_motorkow[4]));
     }
-  if(nuta >= 26 && nuta <= 30) {
+  else if(26<nuta<31) {
     stan_motorkow[5] = -stan_motorkow[5]; // Zmiana stanu motorka 1
     pwm(MOTOR_CHANNELS[5], stan_motorkow[5]); // Ruch do pozycji aktywnej
+    serwerprint("Motorek 6 do pozycji " + String(stan_motorkow[5]));
     }
+    else serwerprint("Pauza.");
 }
 
 int nuta_na_magnes(int nuta){
   //funkcja zwracająca numer magnesu na podstawie nuty
   //nuta 1, 6, 11, 16, 21, 26 pusta struna
-  if (nuta % 5 == 1) {
-    return -1; //pusta struna
-  }
-  else if(1<nuta<6){
-    return (nuta - 1); //mapowanie nut na magnesy
+  if(1<nuta<6){
+    return (nuta - 1);
   }
   else if(6<nuta<11){
     return (nuta - 2);
@@ -309,21 +273,35 @@ int nuta_na_magnes(int nuta){
   else if(26<nuta<31){
     return (nuta - 6);
   }
+  else{
+    return -1; //pauza
+  }
 }
 
 void grajZJson(const char* jsonInput) {
   // Parsowanie JSON
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, jsonInput);
-  if (error) return;
+  if (error) serwerprint("Błąd deserializacji JSON"); return;
 
   //wczytanie tempa
   int bpm = doc["bpm"];
+  serwerprint("Ustawione BPM: " + String(bpm));
 
   //inicjalizacja timera
   initDurationTimer(bpm);
 
   nuty = doc["notes"];
   osemkowe_takty = nuty.size();
+  serwerprint("Liczba ósemkowych taktów: " + String(osemkowe_takty));
   takt = 0;
+}
+
+String readFile(const char* path) {
+  File file = LittleFS.open(path, "r");
+  if (!file) return String();
+  String s;
+  while (file.available()) s += (char)file.read();
+  file.close();
+  return s;
 }

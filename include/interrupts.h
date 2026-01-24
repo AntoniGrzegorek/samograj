@@ -2,9 +2,12 @@
 #define INTERRUPTS_H
 
 #include <Arduino.h>
+#include "serwer.h"
 
 // Ilość magnesów w systemie
 #define MAGNET_COUNT 24
+//częstotliwość zegara mikrokontrolera w MHz
+#define XO_FREQ 40
 
 // Globalna tablica czasów (odlicza czas w dół dla każdego magnesu)
 extern volatile int magnetTimers[MAGNET_COUNT];
@@ -14,6 +17,6 @@ extern volatile int magnetTimers[MAGNET_COUNT];
 extern int MAGNET_PINS[MAGNET_COUNT];
 
 // Inicjalizacja timera obsługującego czasy trwania (co 1ms)
-void initDurationTimer(int bpm);
+int initDurationTimer(int bpm);
 
 #endif

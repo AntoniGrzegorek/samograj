@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Samograj</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            width: 100%;
+            text-align: center;
+        }
+        
+        .title {
+            font-size: 4.5rem;
+            font-weight: 800;
+            margin-bottom: 50px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            background: linear-gradient(90deg, #00dbde, #fc00ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            padding: 20px;
+        }
+        
+        .buttons-container {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            padding: 22px 40px;
+            font-size: 1.5rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            box-shadow: 0 6px 0 rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn:active {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn-1 {
+            background: linear-gradient(90deg, #00b09b, #96c93d);
+            color: white;
+        }
+        
+        .btn-2 {
+            background: linear-gradient(90deg, #ff416c, #ff4b2b);
+            color: white;
+        }
+        
+        .btn-3 {
+            background: linear-gradient(90deg, #2193b0, #6dd5ed);
+            color: white;
+        }
+        
+        .footer {
+            margin-top: 60px;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        @media (max-width: 768px) {
+            .title {
+                font-size: 3rem;
+            }
+            
+            .btn {
+                padding: 18px 30px;
+                font-size: 1.3rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .title {
+                font-size: 2.5rem;
+            }
+            
+            .btn {
+                padding: 16px 25px;
+                font-size: 1.1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">Samograj</h1>
+        
+        <div class="buttons-container">
+            <a href="/debug" class="btn btn-1">Tryb debugowania</a>
+            <a href="/debug" class="btn btn-2">costam</a>
+            <a href="/debug" class="btn btn-3">foo</a>
+        </div>
+        
+        <div class="footer">
+            Strona "Samograj" | Kliknij przyciski, aby zobaczyć działanie
+        </div>
+    </div>
+
+    <script>
+        // Dodatkowe funkcjonalności JavaScript dla przycisków
+        document.querySelector('.btn-1').addEventListener('click', function() {
+            console.log("Przycisk 'Rozpocznij grę' został kliknięty");
+        });
+        
+        document.querySelector('.btn-2').addEventListener('click', function() {
+            console.log("Przycisk 'Opcje' został kliknięty");
+        });
+        
+        document.querySelector('.btn-3').addEventListener('click', function() {
+            console.log("Przycisk 'O autorze' został kliknięty");
+        });
+        
+        // Dodanie efektu wibracji po kliknięciu
+        document.querySelectorAll('.btn').forEach(button => {
+            button.addEventListener('click', function() {
+                this.style.animation = 'none';
+                setTimeout(() => {
+                    this.style.animation = null;
+                }, 10);
+            });
+        });
+    </script>
+</body>
+</html>
