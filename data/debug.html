@@ -3,25 +3,207 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Debug Log</title>
+    <title>Debug</title>
     <style>
-        body{
-            font-family:Segoe UI, Roboto, Arial;
-            background:#07101a;
-            color:#e6f7ff;
-            padding:20px
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        .entry{
-            padding:6px 10px;
-            margin:6px 0;border-radius:6px;
-            background:rgba(255,255,255,0.02);
-            font-family:monospace
+        body {
+            font-family: Segoe UI, Roboto, Arial, sans-serif;
+            background: #07101a;
+            color: #e6f7ff;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        .log-panel {
+            flex: 1;
+            border-right: 2px solid #1a3a4a;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .control-panel {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 15px;
+            color: #00bfff;
+        }
+        h2 {
+            font-size: 18px;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            color: #00d4ff;
+        }
+        .entry {
+            padding: 6px 10px;
+            margin: 4px 0;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.02);
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .button-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 12px 16px;
+            background: linear-gradient(135deg, #0066cc, #0099ff);
+            color: white;
+            border: 1px solid #0066cc;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: linear-gradient(135deg, #0099ff, #00ccff);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 153, 255, 0.3);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .magnet-section, .motor-section {
+            border: 1px solid #1a3a4a;
+            padding: 15px;
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+        .magnet-section {
+            margin-bottom: 20px;
+        }
+        .controls-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        .controls-row input {
+            flex: 1;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #1a3a4a;
+            color: #e6f7ff;
+            border-radius: 4px;
+        }
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #1a3a4a;
+        }
+        .back-link {
+            color: #00bfff;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .back-link:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
 <body>
-    <h1>Command log</h1>
-    <p><a href='/'>Powrót</a></p>
-    %LOG_ENTRIES%
+    <div class="container">
+        <!-- Panel logu -->
+        <div class="log-panel">
+            <div class="top-bar">
+                <h1>Debug Log</h1>
+                <a href='/' class="back-link">← Powrót</a>
+            </div>
+            <div id="log-content">%LOG_ENTRIES%</div>
+        </div>
+        
+        <!-- Panel kontroli -->
+        <div class="control-panel">
+            <h1>Kontrola</h1>
+            
+            <!-- Magnesy -->
+            <div class="magnet-section">
+                <h2>Magnesy (24)</h2>
+                <div class="button-grid" id="magnet-buttons"></div>
+            </div>
+            
+            <!-- Motorki -->
+            <div class="motor-section">
+                <h2>Motorki (6)</h2>
+                <div class="button-grid" id="motor-buttons"></div>
+                <h2>Sterowanie PWM</h2>
+            </div>
+            
+            <!-- Inne -->
+            <h2>Inne</h2>
+            <div class="button-grid">
+                <button onclick="clearLog()">Wyczyść log</button>
+                <button onclick="refreshPage()">Odśwież</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Generuj przyciski magnesów
+        const magnetContainer = document.getElementById('magnet-buttons');
+        for (let i = 0; i < 24; i++) {
+            const btn = document.createElement('button');
+            btn.textContent = `Magnes${i}`;
+            btn.onclick = () => activateMagnetDirect(i);
+            magnetContainer.appendChild(btn);
+        }
+        
+        // Generuj przyciski motorków
+        const motorContainer = document.getElementById('motor-buttons');
+        for (let i = 0; i < 6; i++) {
+            const btn = document.createElement('button');
+            btn.textContent = `Motor ${i}`;
+            btn.onclick = () => toggleMotor(i);
+            motorContainer.appendChild(btn);
+        }
+        
+        function activateMagnetDirect(id) {
+            fetch(`/magnet?id=${id}`).catch(e => console.error(e));
+        }
+        
+        function toggleMotor(channel) {
+            fetch(`/motor?channel=${channel}`).catch(e => console.error(e));
+        }
+        
+        function clearLog() {
+            fetch(`/clearlog`).then(() => location.reload()).catch(e => console.error(e));
+        }
+        
+        function refreshPage() {
+            location.reload();
+        }
+        
+        // Auto-refresh log co 2 sekundy
+        setInterval(() => {
+            fetch('/debug')
+                .then(r => r.text())
+                .then(html => {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const newLog = doc.getElementById('log-content');
+                    if (newLog) {
+                        document.getElementById('log-content').innerHTML = newLog.innerHTML;
+                    }
+                })
+                .catch(e => console.error(e));
+        }, 1000);
+    </script>
 </body>
 </html>

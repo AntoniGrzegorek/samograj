@@ -69,13 +69,13 @@ const int MOTOR_CHANNELS[6] = {0, 1, 2, 3, 4, 5};
 
 //deklaracje funkcji
 int count_JSONs(); //liczenie JSONów
-void graj(); //funkcja odtwarzająca utwór
+int graj(); //funkcja odtwarzająca utwór
 void pwm(int motorChannel, int position);
 void odliczaj(); //funkcja odliczająca czasy magnesów
 int nuta_na_magnes(int nuta); //funkcja zwracająca numer magnesu na podstawie nuty
-void zapisz_nuty(); //funkcja zapisująca aktualne nuty do timera
+void zapisz_nuty(int eight); //funkcja zapisująca aktualne nuty do timera
 void nowaFunkcjaMagnesow(int magnetIndex, int durationMs);
-void grajZJson(const char* jsonInput);
+int grajZJson(const char* jsonInput);
 void motorki(int nuta);
 String readFile(const char* path); //wczytywanie pliku do stringa
 

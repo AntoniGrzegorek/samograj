@@ -8,30 +8,49 @@
 //definicje pinów i funkcji w main.h
 
 //serwer HTTP w serwer.h
+extern WebServer serwer;
 
 //zmienne dotyczące przerwań
 extern hw_timer_t *bpmTimer; //wskaźnik na timer sprzętowy
 extern bool przerwanie; //czy było przerwanie od ostatniej iteracji pętli
 
 //zmienne globalne
+volatile int magnetTimers[MAGNET_COUNT] = {0}; // Tablica czasów dla 24 magnesów (inicjalnie same zera)
 bool running = false; // Stan odtwarzania
 int JSON_count; //liczba JSONów w pamięci
 int song_index = 0; //aktualny indeks JSONa
 int osemkowe_takty = 0; //liczba ósemkowych taktów od startu utworu
 int takt = 0; //aktualny takt
+StaticJsonDocument<16384> songDoc; // Dokument JSON z dużą pamięcią na dane
 JsonArray nuty; //tablica nut
 int stan_motorkow[6]; //stan motorków
+int eight; //długość ósemki w ms
+int button1_state_old = LOW;
+int button2_state_old = LOW;
 
 void setup() {
-  serwerprint("Rozpoczynanie inicjalizacji...");
+  Serial.begin(115200); // Inicjalizacja portu seryjnego
+  delay(100);
+  serwerprint("\n\nRozpoczynanie inicjalizacji...");
   //Inicjalizacja LittleFS
   if(!LittleFS.begin()){
-    serwerprint("Błąd wczytywania pamięci flash");
-    return;
+    serwerprint("Błąd wczytywania pamięci flash. Próbuję formatować...");
+    if(!LittleFS.format()) {
+      serwerprint("Błąd: Nie mogę sformatować systemu plików!");
+      return;
+    }
+    serwerprint("System plików sformatowany. Próbuję ponownie...");
+    if(!LittleFS.begin()) {
+      serwerprint("Błąd: System plików nadal nie montuje się!");
+      return;
+    }
   }
-  else {
-    serwerprint("Pamięć flash wczytana pomyślnie");
-  }
+  serwerprint("Pamięć flash wczytana pomyślnie");
+  
+  delay(500); // Czekaj na dostępność systemu plików
+  
+  // Wczytaj pliki HTML z systemu plików
+  loadFilesFromFS();
 
   //inicjalizacja WiFi
   setupWiFi();
@@ -45,22 +64,30 @@ void setup() {
      ledcAttachPin(MOTOR_PINS[i], MOTOR_CHANNELS[i]);
   }
   serwerprint("PWM zainicjalizowane.");
+  delay(100);
 
   //pinmode'y
   pinMode(LED, OUTPUT);
-  digitalWrite(LED, LOW);
+  serwerprint("LED zainicjalizowany.");
+  delay(100);
   pinMode(BUTTON1, INPUT);
   pinMode(BUTTON2, INPUT);
+  serwerprint("Przyciski zainicjalizowane.");
+  delay(100);
   
-  for(int i=0; i<24; i++) {
+  for(int i=2; i<24; i++) {//zmienić później 2 na 0
     pinMode(MAGNET_PINS[i], OUTPUT);
+    serwerprint("Magnes " + String(i+1) + " zainicjalizowany.");
+    delay(100);
     digitalWrite(MAGNET_PINS[i], LOW);
   }
   serwerprint("GPIO zainicjalizowane.");
+  delay(100);
 
   //Liczenie JSONów
   JSON_count = count_JSONs();
   serwerprint("Znaleziono " + String(JSON_count) + " plików JSON.");
+  delay(100);
 
   //ustawinie początkowych stanów motorków
   for(int i=0; i<6; i++) {
@@ -68,19 +95,25 @@ void setup() {
     pwm(MOTOR_CHANNELS[i], -1);
   }
   serwerprint("Inicjalizacja zakończona.");
+  delay(100);
 }
 
 void loop() {
   // pętla główna
   serwer.handleClient(); //obsługa serwera HTTP
-  if(digitalRead(BUTTON1) == HIGH) {
+
+  //obsługa przycisków
+  int button1_state = digitalRead(BUTTON1);
+  int button2_state = digitalRead(BUTTON2);
+
+  if(button2_state == LOW && button2_state_old == HIGH) {
     serwerprint("Przycisk 1 wciśnięty");
     //start
     if(!running) {
       serwerprint("Rozpoczynanie odtwarzania...");
       running = true;
       digitalWrite(LED, HIGH);
-      graj();
+      eight = graj();
     }
     //stop
     else {
@@ -88,28 +121,40 @@ void loop() {
       running = false;
       digitalWrite(LED, LOW);
       timerAlarmDisable(bpmTimer);
+      timerEnd(bpmTimer);
+      serwerprint("Odtwarzanie zatrzymane.");
     }
   delay(50); // Debounce
   }
-  if(digitalRead(BUTTON2)==HIGH)
-  serwerprint("Przycisk 2 wciśnięty");
+  if(button1_state==LOW && button1_state_old==HIGH)
   {
-    if(!running)
+    serwerprint("Przycisk 2 wciśnięty");
     {
-      //następny utwór
-      song_index++;
-      if(song_index>=JSON_count)
+      if(!running)
       {
-        song_index=0;
+        //następny utwór
+        song_index++;
+        if(song_index>=JSON_count)
+        {
+          song_index=0;
+        }
+        serwerprint("Wybrano utwór o indeksie: " + String(song_index));
+        delay(50); //debounce
       }
-      serwerprint("Wybrano utwór o indeksie: " + String(song_index));
-      delay(50); //debounce
+      else serwerprint("Nie można zmienić utworu podczas odtwarzania!");
     }
   }
+
+  button1_state_old = button1_state;
+  button2_state_old = button2_state;
+
+  //sprawdzamy czy wywołano przerwanie timera
   if(running && przerwanie){
     serwerprint("Przerwanie timera - takt: " + String(takt));
     odliczaj();
-    zapisz_nuty();
+    serwerprint("Magnesy odliczone.");
+    zapisz_nuty(eight);
+    serwerprint("Nuty zagrane.");
     przerwanie = false;
   }
 }
@@ -128,15 +173,17 @@ int count_JSONs() {
   return count;
 }
 
-void graj() {
-  serwerprint("Odtwarzanie utworu index: " + String(song_index));
+int graj() {
+  int eight;
+  serwerprint("Odtwarzanie utworu: " + String(song_index));
   // Odczytanie odpowiedniego pliku JSON
   String filename = "/" + String(song_index) + ".json";
   File file = LittleFS.open(filename, "r");
   if(!file) {
     serwerprint("Nie można otworzyć pliku: " + filename);
-    return;
+    return 0;
   }
+  else serwerprint("Plik " + filename + " otwarty pomyślnie.");
 
   String jsonContent = "";
   while(file.available()) {
@@ -145,11 +192,12 @@ void graj() {
   file.close();
 
   // Odtwarzanie z JSON
-  grajZJson(jsonContent.c_str());
+  eight = grajZJson(jsonContent.c_str());
+  return eight;
 }
 
 void odliczaj(){
-for (int i = 0; i < MAGNET_COUNT; i++) {
+for (int i = 2; i < MAGNET_COUNT; i++) { //zmienić później 2 na 0
     // Jeśli czas jest większy od zera -> dekrementuj
     if (magnetTimers[i] > 0) {
       magnetTimers[i]--;
@@ -186,10 +234,8 @@ void nowaFunkcjaMagnesow(int magnetIndex, int durationMs) {
 }
 
 void zapisz_nuty(int eight) {
-  //inkrementujemy nr taktu
-  takt++;
   //sprawdzamy czy koniec utworu
-  if(takt > osemkowe_takty) {
+  if(takt >= osemkowe_takty-1) {
     takt = 0;
     timerAlarmDisable(bpmTimer);
     timerEnd(bpmTimer);
@@ -199,52 +245,53 @@ void zapisz_nuty(int eight) {
   }
   //odtwarzamy nuty z aktualnego taktu
   else{
-    int ilosc = nuty[takt].size();
+    // Pobierz tablicę nut dla aktualnego taktu
+    serwerprint("Wczytywanie " + String(takt)+". taktu...");
+    JsonArray takt_array = nuty[takt].as<JsonArray>();
+    int ilosc = takt_array.size();
     serwerprint("Liczba nut: " + String(ilosc));
     for(int i=0; i<ilosc; i++){
-      int nuta = nuty[takt][i]["n"];
-      int dlugosc = eight*nuty[takt][i]["d"];
+      int nuta = takt_array[i]["n"];
+      int osemki = takt_array[i]["d"];
+      int dlugosc = osemki * eight;
       serwerprint("Nuta: " + String(nuta) + ", długość: " + String(dlugosc) + " ms");
-      if (nuta!=-1) nowaFunkcjaMagnesow(nuta_na_magnes(nuta), dlugosc);
-    }
-    delay(100);
-    for(int i=0; i<ilosc; i++){
-      int nuta = nuty[takt][i]["n"];
-      if(nuta!=-1){
-        motorki(nuta);
-      }
+      if (nuta!=0) nowaFunkcjaMagnesow(nuta_na_magnes(nuta), dlugosc);
+      delay(50);
+      motorki(nuta);
     }
   }
+  //inkrementujemy nr taktu
+  takt++;
 }
 
 void motorki(int nuta) {
   //sterowanie motorkami na podstawie nut
-  if(1<nuta<6) {
+  if(1<=nuta && nuta <6) {
     stan_motorkow[0] = -stan_motorkow[0]; // Zmiana stanu motorka 1
     pwm(MOTOR_CHANNELS[0], stan_motorkow[0]); // Ruch do pozycji aktywnej
     serwerprint("Motorek 1 do pozycji " + String(stan_motorkow[0]));
     }
-  else if(6<nuta<11) {
+  else if(6<=nuta && nuta <11) {
     stan_motorkow[1] = -stan_motorkow[1]; // Zmiana stanu motorka 2
     pwm(MOTOR_CHANNELS[1], stan_motorkow[1]); // Ruch do pozycji aktywnej
     serwerprint("Motorek 2 do pozycji " + String(stan_motorkow[1]));
     }
-  else if(11<nuta<16) {
+  else if(11<=nuta && nuta <16) {
     stan_motorkow[2] = -stan_motorkow[2]; // Zmiana stanu motorka 3
     pwm(MOTOR_CHANNELS[2], stan_motorkow[2]); // Ruch do pozycji aktywnej
     serwerprint("Motorek 3 do pozycji " + String(stan_motorkow[2]));
     }
-  else if(16<nuta<21) {
+  else if(16<=nuta && nuta <21) {
     stan_motorkow[3] = -stan_motorkow[3]; // Zmiana stanu motorka 4
     pwm(MOTOR_CHANNELS[3], stan_motorkow[3]); // Ruch do pozycji aktywnej
     serwerprint("Motorek 4 do pozycji " + String(stan_motorkow[3]));
     }
-  else if(21<nuta<26) {
+  else if(21<=nuta && nuta <26) {
     stan_motorkow[4] = -stan_motorkow[4]; // Zmiana stanu motorka 1
     pwm(MOTOR_CHANNELS[4], stan_motorkow[4]); // Ruch do pozycji aktywnej
     serwerprint("Motorek 5 do pozycji " + String(stan_motorkow[4]));
     }
-  else if(26<nuta<31) {
+  else if(26<=nuta && nuta <31) {
     stan_motorkow[5] = -stan_motorkow[5]; // Zmiana stanu motorka 1
     pwm(MOTOR_CHANNELS[5], stan_motorkow[5]); // Ruch do pozycji aktywnej
     serwerprint("Motorek 6 do pozycji " + String(stan_motorkow[5]));
@@ -255,46 +302,53 @@ void motorki(int nuta) {
 int nuta_na_magnes(int nuta){
   //funkcja zwracająca numer magnesu na podstawie nuty
   //nuta 1, 6, 11, 16, 21, 26 pusta struna
-  if(1<nuta<6){
+  if(3<nuta && nuta <6){ //zmienić na 1<nuta<6 potem
     return (nuta - 1);
   }
-  else if(6<nuta<11){
+  else if(6<nuta && nuta <11){
     return (nuta - 2);
   }
-  else if(11<nuta<16){
+  else if(11<nuta && nuta <16){
     return (nuta - 3);
   }
-  else if(16<nuta<21){
+  else if(16<nuta && nuta <21){
     return (nuta - 4);
   }
-  else if(21<nuta<26){
+  else if(21<nuta && nuta <26){
     return (nuta - 5);
   }
-  else if(26<nuta<31){
+  else if(26<nuta && nuta <31){
     return (nuta - 6);
   }
   else{
-    return -1; //pauza
+    return 0; //pauza
   }
 }
 
-void grajZJson(const char* jsonInput) {
-  // Parsowanie JSON
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, jsonInput);
-  if (error) serwerprint("Błąd deserializacji JSON"); return;
+int grajZJson(const char* jsonInput) {
+  int eight;
+  // Parsowanie JSON do globalnego dokumentu
+  songDoc.clear();
+  DeserializationError error = deserializeJson(songDoc, jsonInput);
+  if (error)
+  {
+    serwerprint("Błąd deserializacji JSON");
+    return 0;
+  }
+  else serwerprint("JSON zdeserializowany pomyślnie.");
 
   //wczytanie tempa
-  int bpm = doc["bpm"];
+  int bpm = songDoc["bpm"];
   serwerprint("Ustawione BPM: " + String(bpm));
 
   //inicjalizacja timera
-  initDurationTimer(bpm);
+  eight = initDurationTimer(bpm);
 
-  nuty = doc["notes"];
+  nuty = songDoc["notes"];
   osemkowe_takty = nuty.size();
   serwerprint("Liczba ósemkowych taktów: " + String(osemkowe_takty));
   takt = 0;
+  return eight;
 }
 
 String readFile(const char* path) {

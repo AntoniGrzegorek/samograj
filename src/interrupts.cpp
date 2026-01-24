@@ -1,7 +1,6 @@
 #include "interrupts.h"
+#include "serwer.h"
 
-// Tablica czasów dla 24 magnesów (inicjalnie same zera)
-volatile int magnetTimers[MAGNET_COUNT] = {0};
 
 // Wskaźnik na timer sprzętowy
 hw_timer_t *bpmTimer;
