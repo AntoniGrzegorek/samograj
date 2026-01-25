@@ -39,9 +39,9 @@ const int MAGNES14 = 47;
 const int MAGNES15 = 21;
 const int MAGNES16 = 20;
 
-const int MAGNES17 = 19;
-const int MAGNES18 = 7;
-const int MAGNES19 = 15;
+const int MAGNES17 = 7;
+const int MAGNES18 = 15;
+const int MAGNES19 = 19;
 const int MAGNES20 = 16;
 
 const int MAGNES21 = 17;

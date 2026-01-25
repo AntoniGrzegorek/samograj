@@ -12,6 +12,15 @@ void debugHandler();
 void magnetHandler();
 void motorHandler();
 void clearlogHandler();
+void fileManagerHandler();
+void filesListHandler();
+void fileGetHandler();
+void fileUploadHandler();
+void fileDeleteHandler();
+void fileSaveHandler();
+void fileMidiAnalyzeHandler();
+void fileConvertHandler();
+void logHandler();
 void serwerprint(String message);
 void loadFilesFromFS();
 

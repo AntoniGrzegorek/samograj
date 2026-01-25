@@ -131,8 +131,10 @@
         
         <!-- Panel kontroli -->
         <div class="control-panel">
-            <h1>Kontrola</h1>
-            
+            <div class="top-bar">
+                <h1>Kontrola</h1>
+                <a href='/' class="back-link">← Powrót</a>
+            </div>
             <!-- Magnesy -->
             <div class="magnet-section">
                 <h2>Magnesy (24)</h2>
@@ -143,7 +145,6 @@
             <div class="motor-section">
                 <h2>Motorki (6)</h2>
                 <div class="button-grid" id="motor-buttons"></div>
-                <h2>Sterowanie PWM</h2>
             </div>
             
             <!-- Inne -->
@@ -160,7 +161,7 @@
         const magnetContainer = document.getElementById('magnet-buttons');
         for (let i = 0; i < 24; i++) {
             const btn = document.createElement('button');
-            btn.textContent = `Magnes${i}`;
+            btn.textContent = `Magnes ${i}`;
             btn.onclick = () => activateMagnetDirect(i);
             magnetContainer.appendChild(btn);
         }

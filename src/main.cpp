@@ -21,7 +21,7 @@ int JSON_count; //liczba JSONów w pamięci
 int song_index = 0; //aktualny indeks JSONa
 int osemkowe_takty = 0; //liczba ósemkowych taktów od startu utworu
 int takt = 0; //aktualny takt
-StaticJsonDocument<16384> songDoc; // Dokument JSON z dużą pamięcią na dane
+JsonDocument songDoc; // Dokument JSON
 JsonArray nuty; //tablica nut
 int stan_motorkow[6]; //stan motorków
 int eight; //długość ósemki w ms
@@ -29,7 +29,7 @@ int button1_state_old = LOW;
 int button2_state_old = LOW;
 
 void setup() {
-  Serial.begin(115200); // Inicjalizacja portu seryjnego
+  //Serial.begin(115200); // Inicjalizacja portu seryjnego
   delay(100);
   serwerprint("\n\nRozpoczynanie inicjalizacji...");
   //Inicjalizacja LittleFS
@@ -75,7 +75,7 @@ void setup() {
   serwerprint("Przyciski zainicjalizowane.");
   delay(100);
   
-  for(int i=2; i<24; i++) {//zmienić później 2 na 0
+  for(int i=0; i<24; i++) {//zmienić później 2 na 0
     pinMode(MAGNET_PINS[i], OUTPUT);
     serwerprint("Magnes " + String(i+1) + " zainicjalizowany.");
     delay(100);
@@ -197,7 +197,7 @@ int graj() {
 }
 
 void odliczaj(){
-for (int i = 2; i < MAGNET_COUNT; i++) { //zmienić później 2 na 0
+for (int i = 0; i < MAGNET_COUNT; i++) { //zmienić później 2 na 0
     // Jeśli czas jest większy od zera -> dekrementuj
     if (magnetTimers[i] > 0) {
       magnetTimers[i]--;
